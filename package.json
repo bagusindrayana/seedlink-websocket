@@ -1,0 +1,6 @@
+{
+	"dependencies": {
+		"seisplotjs": "^3.2.1",
+		"ws": "^8.19.0"
+	}
+}
