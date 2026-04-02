@@ -1,6 +1,7 @@
 import { WebSocketServer } from "ws";
 import http from "http";
 import net from "net";
+import { URL } from "url";
 
 const PORT = process.env.PORT || 8080;
 
@@ -11,8 +12,13 @@ const wss = new WebSocketServer({ server });
 const SEEDLINK_HOST = "geofon.gfz-potsdam.de";
 const SEEDLINK_PORT = 18000;
 
-wss.on("connection", (ws) => {
+wss.on("connection", (ws, req) => {
   console.log("Browser client connected");
+
+  // Parse URL untuk mendapatkan parameter query
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const startTime = url.searchParams.get("start_time");
+  const endTime = url.searchParams.get("end_time");
 
   // Simpan referensi socket SeedLink untuk client ini
   let seedlinkSocket = null;
@@ -24,7 +30,9 @@ wss.on("connection", (ws) => {
 
       if (network && station && channel) {
         console.log(
-          `Client requested stream: ${network}_${station} (${channel})`,
+          `Client requested stream: ${network}_${station} (${channel})` +
+            (startTime ? ` from ${startTime}` : "") +
+            (endTime ? ` to ${endTime}` : ""),
         );
 
         // Jika client sudah punya koneksi aktif, tutup dulu sebelum ganti stasiun
@@ -38,6 +46,8 @@ wss.on("connection", (ws) => {
           network,
           station,
           channel,
+          startTime,
+          endTime,
         );
       }
     } catch (err) {
@@ -51,7 +61,14 @@ wss.on("connection", (ws) => {
   });
 });
 
-function createSeedLinkConnection(ws, network, station, channel) {
+function createSeedLinkConnection(
+  ws,
+  network,
+  station,
+  channel,
+  startTime,
+  endTime,
+) {
   const seedlink = new net.Socket();
   let state = "HANDSHAKE";
 
@@ -67,7 +84,37 @@ function createSeedLinkConnection(ws, network, station, channel) {
       // Kirim konfigurasi dinamis berdasarkan input client
       seedlink.write(`STATION ${station} ${network}\r\n`);
       seedlink.write(`SELECT ${channel}\r\n`);
-      seedlink.write("DATA\r\n");
+
+      const formatSeedLinkTime = (isoTime) => {
+        const date = new Date(isoTime);
+        return [
+          date.getUTCFullYear(),
+          (date.getUTCMonth() + 1).toString().padStart(2, "0"),
+          date.getUTCDate().toString().padStart(2, "0"),
+          date.getUTCHours().toString().padStart(2, "0"),
+          date.getUTCMinutes().toString().padStart(2, "0"),
+          date.getUTCSeconds().toString().padStart(2, "0"),
+        ].join(",");
+      };
+
+      if (startTime && endTime) {
+        try {
+          const formattedStartTime = formatSeedLinkTime(startTime);
+          const formattedEndTime = formatSeedLinkTime(endTime);
+          seedlink.write(`TIME ${formattedStartTime} ${formattedEndTime}\r\n`);
+          console.log(
+            `Requesting historical data for ${network}_${station} ${channel} from ${formattedStartTime} to ${formattedEndTime}`,
+          );
+        } catch (e) {
+          console.error(
+            `Error formatting time parameters: ${e.message}. Falling back to real-time data.`,
+          );
+          seedlink.write("DATA\r\n");
+        }
+      } else {
+        seedlink.write("DATA\r\n");
+      }
+
       seedlink.write("END\r\n");
       state = "STREAMING";
       console.log(`Streaming started for ${network}_${station} ${channel}`);
