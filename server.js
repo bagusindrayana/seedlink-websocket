@@ -8,7 +8,7 @@ const server = http.createServer();
 
 const wss = new WebSocketServer({ server });
 
-const SEEDLINK_HOST = "geofon.gfz-potsdam.de";
+const SEEDLINK_HOST = "geofon.de";
 const SEEDLINK_PORT = 18000;
 
 wss.on("connection", (ws) => {
@@ -22,12 +22,19 @@ wss.on("connection", (ws) => {
       const config = JSON.parse(message);
       // Tambahkan ekstraksi start_time dan end_time
       const {
+        host: seedlinkHost,
         net: network,
         sta: station,
         cha: channel,
         start_time,
         end_time,
       } = config;
+
+      if (seedlinkHost) {
+        console.log(`Using custom host: ${seedlinkHost}`);
+      } else {
+        console.log(`Using default host: ${SEEDLINK_HOST}`);
+      }
 
       if (network && station && channel) {
         console.log(
@@ -71,13 +78,14 @@ function createSeedLinkConnection(
   channel,
   start_time,
   end_time,
+  seedlinkHost = null,
 ) {
   const seedlink = new net.Socket();
   let state = "HANDSHAKE";
 
   console.log(`Connecting to SeedLink for ${station}...`);
 
-  seedlink.connect(SEEDLINK_PORT, SEEDLINK_HOST, () => {
+  seedlink.connect(SEEDLINK_PORT, seedlinkHost ?? SEEDLINK_HOST, () => {
     seedlink.write("HELLO\r\n");
   });
 
