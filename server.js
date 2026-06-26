@@ -57,6 +57,7 @@ wss.on("connection", (ws) => {
           channel,
           start_time,
           end_time,
+          seedlinkHost ?? SEEDLINK_HOST,
         );
       }
     } catch (err) {
@@ -82,7 +83,7 @@ function createSeedLinkConnection(
 ) {
   const seedlink = new net.Socket();
   let state = "HANDSHAKE";
-
+  console.log(`seedlinkHost : ${seedlinkHost}`);
   console.log(`Connecting to SeedLink for ${station}...`);
 
   seedlink.connect(SEEDLINK_PORT, seedlinkHost ?? SEEDLINK_HOST, () => {
